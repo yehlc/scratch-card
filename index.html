@@ -121,37 +121,49 @@
 
                 const profile = await liff.getProfile();
                 
-                // 呼叫 GAS 進行抽獎
+                // --- 改良版 Fetch 程式碼開始 ---
                 fetch(GAS_API_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ userId: profile.userId, displayName: profile.displayName })
+                    headers: {
+                        // 明確指定類型，避免 CORS 錯誤
+                        'Content-Type': 'text/plain;charset=utf-8', 
+                    },
+                    body: JSON.stringify({ 
+                        userId: profile.userId, 
+                        displayName: profile.displayName 
+                    })
                 })
-                .then(res => res.json())
+                .then(async res => {
+                    // 先檢查 HTTP 狀態碼
+                    if (!res.ok) {
+                        const text = await res.text();
+                        throw new Error(`Server Error: ${res.status} - ${text.slice(0, 50)}...`);
+                    }
+                    return res.json();
+                })
                 .then(data => {
+                    // 這邊維持原本的邏輯
                     const statusBar = document.getElementById('status-bar');
                     const cardArea = document.getElementById('cardArea');
                     
                     if (data.status === 'success' || data.status === 'played') {
-                        // 1. 拿到獎品，更新底層文字
                         finalPrize = data.prize;
                         document.getElementById('prizeText').innerText = finalPrize;
                         
-                        // 2. 更新銀漆層文字 (把"讀取中"蓋掉)
-                        ctx.globalCompositeOperation = 'source-over'; // 改回正常繪圖模式
-                        ctx.fillStyle = '#CCCCCC'; ctx.fillRect(0, 0, width, height); // 重刷底漆
+                        ctx.globalCompositeOperation = 'source-over';
+                        ctx.fillStyle = '#CCCCCC'; ctx.fillRect(0, 0, width, height);
                         ctx.fillStyle = '#666666'; ctx.font = '24px Arial'; ctx.fillText("請刮開", 115, 85);
-                        ctx.globalCompositeOperation = 'destination-out'; // 改回擦除模式
+                        ctx.globalCompositeOperation = 'destination-out';
 
-                        // 3. 啟用刮刮卡
                         cardArea.style.opacity = '1';
                         cardArea.style.pointerEvents = 'auto';
                         
                         if (data.status === 'played') {
                             statusBar.innerText = "您已經玩過了，這是您的獎項紀錄";
                             statusBar.style.background = "#e2e3e5";
-                            // 直接刮開
                             ctx.clearRect(0, 0, width, height);
                             isRevealed = true;
+                            document.getElementById('claimBtn').style.display = 'none'; // 玩過就隱藏按鈕
                         } else {
                             statusBar.innerText = "抽獎資格確認完畢，請刮開！";
                             statusBar.style.background = "#d4edda"; statusBar.style.color = "#155724";
@@ -164,12 +176,13 @@
                     }
                 })
                 .catch(err => {
-                    document.getElementById('status-bar').innerText = "連線失敗，請重新整理頁面";
+                    console.error(err);
+                    // 顯示更詳細的錯誤給您看
+                    document.getElementById('status-bar').innerText = "連線失敗：" + err.message;
+                    document.getElementById('status-bar').style.background = "#f8d7da";
+                    document.getElementById('status-bar').style.color = "#721c24";
                 });
-
-            } catch (err) {
-                alert("LIFF Error: " + err);
-            }
+                // --- 改良版 Fetch 程式碼結束 ---
         }
 
         function handleClaim() {
@@ -186,4 +199,5 @@
     </script>
 </body>
 </html>
+
 
