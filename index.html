@@ -116,16 +116,16 @@
 
         async function init() {
             try {
+                // 1. 初始化 LIFF
                 await liff.init({ liffId: MY_LIFF_ID });
                 if (!liff.isLoggedIn()) { liff.login(); return; }
 
                 const profile = await liff.getProfile();
                 
-                // --- 改良版 Fetch 程式碼開始 ---
+                // 2. 呼叫 GAS 後端
                 fetch(GAS_API_URL, {
                     method: 'POST',
                     headers: {
-                        // 明確指定類型，避免 CORS 錯誤
                         'Content-Type': 'text/plain;charset=utf-8', 
                     },
                     body: JSON.stringify({ 
@@ -134,7 +134,6 @@
                     })
                 })
                 .then(async res => {
-                    // 先檢查 HTTP 狀態碼
                     if (!res.ok) {
                         const text = await res.text();
                         throw new Error(`Server Error: ${res.status} - ${text.slice(0, 50)}...`);
@@ -142,7 +141,6 @@
                     return res.json();
                 })
                 .then(data => {
-                    // 這邊維持原本的邏輯
                     const statusBar = document.getElementById('status-bar');
                     const cardArea = document.getElementById('cardArea');
                     
@@ -163,7 +161,7 @@
                             statusBar.style.background = "#e2e3e5";
                             ctx.clearRect(0, 0, width, height);
                             isRevealed = true;
-                            document.getElementById('claimBtn').style.display = 'none'; // 玩過就隱藏按鈕
+                            document.getElementById('claimBtn').style.display = 'none';
                         } else {
                             statusBar.innerText = "抽獎資格確認完畢，請刮開！";
                             statusBar.style.background = "#d4edda"; statusBar.style.color = "#155724";
@@ -177,12 +175,16 @@
                 })
                 .catch(err => {
                     console.error(err);
-                    // 顯示更詳細的錯誤給您看
                     document.getElementById('status-bar').innerText = "連線失敗：" + err.message;
                     document.getElementById('status-bar').style.background = "#f8d7da";
                     document.getElementById('status-bar').style.color = "#721c24";
                 });
-                // --- 改良版 Fetch 程式碼結束 ---
+
+            } catch (error) {
+                // ★ 就是這裡！您原本漏掉了這一段 ★
+                console.error("LIFF 初始化或執行錯誤", error);
+                document.getElementById('status-bar').innerText = "系統錯誤：" + error.message;
+            }
         }
 
         function handleClaim() {
@@ -199,5 +201,6 @@
     </script>
 </body>
 </html>
+
 
 
