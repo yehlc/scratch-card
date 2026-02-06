@@ -16,85 +16,70 @@
         h2 { margin-top: 30px; color: #333; }
         .desc { color: #666; font-size: 14px; margin-bottom: 20px; }
         
-        /* 刮刮卡外框 */
         .scratch-container {
-            position: relative;
-            width: 300px;
-            height: 150px;
-            border: 4px solid #333;
-            border-radius: 10px;
+            position: relative; width: 300px; height: 150px;
+            border: 4px solid #333; border-radius: 10px;
             box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-            overflow: hidden;
-            background: white;
+            overflow: hidden; background: white;
+            /* 預設透明度降低，代表不能刮 */
+            opacity: 0.5; pointer-events: none; transition: opacity 0.5s;
         }
 
-        /* 獎項層 (在底部) */
         .prize-layer {
-            width: 100%; height: 100%;
-            position: absolute; top: 0; left: 0; z-index: 1;
+            width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1;
             display: flex; justify-content: center; align-items: center;
-            font-size: 28px; font-weight: bold; color: #e74c3c;
-            text-align: center;
+            font-size: 28px; font-weight: bold; color: #e74c3c; text-align: center; padding: 10px;
         }
 
-        /* 銀漆層 (Canvas) */
-        canvas {
-            position: absolute; top: 0; left: 0; z-index: 2;
-            cursor: pointer;
-        }
+        canvas { position: absolute; top: 0; left: 0; z-index: 2; cursor: pointer; }
 
-        /* 按鈕區 */
         .btn-area { margin-top: 30px; text-align: center; }
         button {
             padding: 12px 40px; font-size: 18px; border: none; border-radius: 50px;
-            cursor: pointer; display: none; /* 預設隱藏 */
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            cursor: pointer; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
         #claimBtn { background-color: #06c755; color: white; }
-        #loading { display: block; background: none; color: #999; box-shadow: none; cursor: default;}
+
+        /* 狀態列 */
+        #status-bar {
+            margin-top: 10px; padding: 8px 20px;
+            background: #fff3cd; color: #856404; border-radius: 20px;
+            font-size: 14px; display: block;
+        }
     </style>
 </head>
 <body>
 
     <h2>🎉 同興營造 尾牙樂 🎉</h2>
-    <p class="desc">請直接在下方刮開銀漆</p>
+    <div id="status-bar">正在連線至總部資料庫...</div>
     
-    <div class="scratch-container">
-        <div class="prize-layer" id="prizeText">準備中...</div>
+    <div class="scratch-container" id="cardArea">
+        <div class="prize-layer" id="prizeText">...</div>
         <canvas id="scratchCanvas"></canvas>
     </div>
 
     <div class="btn-area">
-        <button id="loading">讀取中...</button>
-        <button id="claimBtn" onclick="closeLiff()">我要領獎</button>
+        <button id="claimBtn" onclick="handleClaim()">我要領獎</button>
     </div>
 
     <script>
-        // ▼▼▼ 設定區：之後拿到 LIFF ID 請填在這裡 ▼▼▼
+        // ▼▼▼ 設定區 ▼▼▼
         const MY_LIFF_ID = "2009067472-oErqzHA9"; 
+        const GAS_API_URL = "請將_GAS部署的網址_完整貼在這裡"; 
         // ▲▲▲ 設定區結束 ▲▲▲
 
         const canvas = document.getElementById('scratchCanvas');
         const ctx = canvas.getContext('2d');
-        const width = 300;
-        const height = 150;
+        const width = 300; const height = 150;
         let isDrawing = false;
+        let finalPrize = "";
 
-        // 設定畫布
-        canvas.width = width;
-        canvas.height = height;
-        
-        // 畫上銀漆
-        ctx.fillStyle = '#CCCCCC';
-        ctx.fillRect(0, 0, width, height);
-        ctx.fillStyle = '#666666';
-        ctx.font = '24px Arial';
-        ctx.fillText("請刮開", 115, 85);
-        
-        // 設定擦除模式
+        // 畫布初始化
+        canvas.width = width; canvas.height = height;
+        ctx.fillStyle = '#CCCCCC'; ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = '#666666'; ctx.font = '24px Arial'; ctx.fillText("讀取中...", 110, 85);
         ctx.globalCompositeOperation = 'destination-out';
 
-        // 監聽畫布操作
         function getPos(e) {
             const rect = canvas.getBoundingClientRect();
             let cx = e.clientX || e.touches[0].clientX;
@@ -105,12 +90,9 @@
             if (!isDrawing) return;
             e.preventDefault();
             const pos = getPos(e);
-            ctx.beginPath();
-            ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2); ctx.fill();
             checkScratchPercent();
         }
-
         canvas.addEventListener('mousedown', () => isDrawing = true);
         canvas.addEventListener('touchstart', () => isDrawing = true);
         canvas.addEventListener('mousemove', scratch);
@@ -118,7 +100,6 @@
         canvas.addEventListener('mouseup', () => isDrawing = false);
         canvas.addEventListener('touchend', () => isDrawing = false);
 
-        // 檢查刮開比例
         let isRevealed = false;
         function checkScratchPercent() {
             if(isRevealed) return;
@@ -127,60 +108,81 @@
             for (let i = 3; i < imageData.data.length; i += 4) {
                 if (imageData.data[i] === 0) clearCount++;
             }
-            if ((clearCount / (width * height)) > 0.4) { // 刮開 40%
+            if ((clearCount / (width * height)) > 0.4) {
                 isRevealed = true;
                 document.getElementById('claimBtn').style.display = 'inline-block';
             }
         }
 
-        // 初始化 LIFF
         async function init() {
             try {
-                // 如果還沒填 ID，先不初始化
-                if(MY_LIFF_ID === "請在此填入您的LIFF_ID") {
-                    document.getElementById('prizeText').innerText = "未設定 LIFF ID";
-                    document.getElementById('loading').innerText = "請設定程式碼";
-                    return;
-                }
-
                 await liff.init({ liffId: MY_LIFF_ID });
-                
-                if (!liff.isLoggedIn()) {
-                    liff.login();
-                    return;
-                }
+                if (!liff.isLoggedIn()) { liff.login(); return; }
 
-                // 登入成功，決定獎項 (這裡用簡單隨機，您可以改成呼叫 API)
-                const prizes = ["現金 200元", "現金 200元", "電影票 1張", "特休 1天", "參加獎 飲料"];
-                // 隨機選一個
-                const result = prizes[Math.floor(Math.random() * prizes.length)];
+                const profile = await liff.getProfile();
                 
-                document.getElementById('prizeText').innerText = result;
-                document.getElementById('loading').style.display = 'none';
+                // 呼叫 GAS 進行抽獎
+                fetch(GAS_API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ userId: profile.userId, displayName: profile.displayName })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    const statusBar = document.getElementById('status-bar');
+                    const cardArea = document.getElementById('cardArea');
+                    
+                    if (data.status === 'success' || data.status === 'played') {
+                        // 1. 拿到獎品，更新底層文字
+                        finalPrize = data.prize;
+                        document.getElementById('prizeText').innerText = finalPrize;
+                        
+                        // 2. 更新銀漆層文字 (把"讀取中"蓋掉)
+                        ctx.globalCompositeOperation = 'source-over'; // 改回正常繪圖模式
+                        ctx.fillStyle = '#CCCCCC'; ctx.fillRect(0, 0, width, height); // 重刷底漆
+                        ctx.fillStyle = '#666666'; ctx.font = '24px Arial'; ctx.fillText("請刮開", 115, 85);
+                        ctx.globalCompositeOperation = 'destination-out'; // 改回擦除模式
+
+                        // 3. 啟用刮刮卡
+                        cardArea.style.opacity = '1';
+                        cardArea.style.pointerEvents = 'auto';
+                        
+                        if (data.status === 'played') {
+                            statusBar.innerText = "您已經玩過了，這是您的獎項紀錄";
+                            statusBar.style.background = "#e2e3e5";
+                            // 直接刮開
+                            ctx.clearRect(0, 0, width, height);
+                            isRevealed = true;
+                        } else {
+                            statusBar.innerText = "抽獎資格確認完畢，請刮開！";
+                            statusBar.style.background = "#d4edda"; statusBar.style.color = "#155724";
+                        }
+                    } else if (data.status === 'empty') {
+                        statusBar.innerText = "來晚了一步，獎品已全數發完！";
+                        cardArea.style.display = 'none';
+                    } else {
+                        statusBar.innerText = "系統錯誤：" + data.message;
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('status-bar').innerText = "連線失敗，請重新整理頁面";
+                });
 
             } catch (err) {
-                document.getElementById('prizeText').innerText = "錯誤";
-                alert("LIFF 初始化失敗: " + err);
+                alert("LIFF Error: " + err);
             }
         }
 
-        function closeLiff() {
-            const prize = document.getElementById('prizeText').innerText;
-            // 嘗試發送訊息回聊天室
+        function handleClaim() {
+            if (!liff.isInClient()) {
+                alert('恭喜中獎！請截圖此畫面給工作人員。'); return;
+            }
             liff.sendMessages([{
-                type: 'text',
-                text: '我參加了同興營造刮刮樂，抽中了：' + prize
-            }]).then(() => {
-                liff.closeWindow();
-            }).catch((err) => {
-                // 如果用戶沒有加入好友，可能會發送失敗，直接關閉
-                liff.closeWindow();
-            });
+                type: 'text', text: '【同興營造尾牙】\n' + liff.getDecodedIDToken().name + '\n我刮中了：' + finalPrize
+            }]).then(() => { liff.closeWindow(); })
+            .catch(() => { alert('恭喜中獎：' + finalPrize + '\n(訊息發送失敗，請截圖領獎)'); });
         }
 
-        // 啟動
         init();
     </script>
 </body>
-
 </html>
