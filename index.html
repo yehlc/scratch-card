@@ -144,7 +144,14 @@
                     const statusBar = document.getElementById('status-bar');
                     const cardArea = document.getElementById('cardArea');
                     
-                    if (data.status === 'success' || data.status === 'played') {
+                    // --- 這裡新增 blocked 的判斷 ---
+    if (data.status === 'blocked') {
+        // 如果是黑名單
+        statusBar.innerText = data.message; // 顯示後端傳來的 "抱歉..."
+        statusBar.style.background = "#f8d7da"; // 紅色背景
+        statusBar.style.color = "#721c24";      // 紅色文字
+        cardArea.style.display = 'none';        // 隱藏刮刮卡，不給刮
+    }else if (data.status === 'success' || data.status === 'played') {
                         finalPrize = data.prize;
                         document.getElementById('prizeText').innerText = finalPrize;
                         
@@ -201,6 +208,7 @@
     </script>
 </body>
 </html>
+
 
 
 
